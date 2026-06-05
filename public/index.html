@@ -3,14 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RSS</title>
+  <title>Veille — Flux RSS tech</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="app">
-    <p class="status" id="status" role="status"></p>
-    <section class="feed-result" id="feed-result" aria-live="polite"></section>
-  </main>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+          </div>
+
+    <div class="topbar-right">
+      <dl class="stats" id="stats" aria-live="polite"></dl>
+      <button class="refresh" id="refresh" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/>
+        </svg>
+        <span>Actualiser</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/>
+      </svg>
+      <input id="search" type="search" placeholder="Rechercher un article, un sujet…" autocomplete="off">
+    </label>
+    <div class="filters" id="filters" role="group" aria-label="Filtrer par source"></div>
+  </div>
+
+  <p class="status" id="status" role="status"></p>
+
+  <main class="grid" id="feed-result" aria-live="polite"></main>
+
+  <p class="empty" id="empty" hidden>Aucun article ne correspond à votre recherche.</p>
 
   <script src="feeds.js"></script>
   <script src="app.js"></script>

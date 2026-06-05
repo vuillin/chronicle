@@ -2,33 +2,58 @@ const FEEDS = window.RSS_MONITOR_FEEDS || [];
 
 const statusText = document.querySelector("#status");
 const result = document.querySelector("#feed-result");
+const statsEl = document.querySelector("#stats");
+const filtersEl = document.querySelector("#filters");
+const searchInput = document.querySelector("#search");
+const emptyEl = document.querySelector("#empty");
+const refreshBtn = document.querySelector("#refresh");
+
+const CALENDAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm12 7v10H5V9h14Z"/></svg>`;
+const ARROW_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 11v2h10l-4 4 1.4 1.4L19.8 12l-7.4-7.4L11 6l4 4H5Z"/></svg>`;
+
+let allArticles = [];
+let activeSource = "all";
+
+refreshBtn.addEventListener("click", loadFeeds);
+searchInput.addEventListener("input", render);
 
 loadFeeds();
 
 async function loadFeeds() {
-  setStatus("Recuperation des flux...");
-  result.replaceChildren();
+  refreshBtn.classList.add("is-loading");
+  setStatus("Récupération des flux…");
+  activeSource = "all";
+  renderSkeletons();
 
   const results = await Promise.allSettled(FEEDS.map(fetchFeed));
-  let articleCount = 0;
-  let failedCount = 0;
 
-  for (const resultItem of results) {
-    if (resultItem.status === "fulfilled") {
-      articleCount += resultItem.value.items.length;
-      renderFeed(resultItem.value);
+  allArticles = [];
+  const errors = [];
+
+  for (const item of results) {
+    if (item.status === "fulfilled") {
+      const feed = item.value;
+      for (const article of feed.items) {
+        allArticles.push({ ...article, source: feed });
+      }
     } else {
-      failedCount += 1;
-      renderFeedError(resultItem.reason);
+      errors.push(item.reason);
     }
   }
 
-  if (articleCount === 0 && failedCount > 0) {
-    setStatus("Aucun flux n'a pu etre recupere.");
-    return;
+  allArticles.sort((a, b) => dateValue(b.pubDate) - dateValue(a.pubDate));
+
+  renderFilters();
+  renderStats();
+  render(errors);
+
+  if (allArticles.length === 0 && errors.length > 0) {
+    setStatus("Aucun flux n'a pu être récupéré.");
+  } else {
+    setStatus(errors.length > 0 ? `${errors.length} flux ignoré(s).` : "");
   }
 
-  setStatus(failedCount > 0 ? `${failedCount} flux ignore(s).` : "");
+  refreshBtn.classList.remove("is-loading");
 }
 
 async function fetchFeed(source) {
@@ -36,229 +61,254 @@ async function fetchFeed(source) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(`${source.url} - ${data.error || "Impossible de recuperer le flux."}`);
+    throw new Error(`${source.title} — ${data.error || "Impossible de récupérer le flux."}`);
   }
 
-  return {
-    ...data.feed,
-    title: source.title,
-    image: source.image,
-    theme: source.theme
-  };
+  return { ...data.feed, ...source };
 }
 
-function renderFeedError(error) {
-  const message = document.createElement("p");
-  message.className = "feed-error";
-  message.textContent = error.message;
-  result.append(message);
+function render(errors = []) {
+  const query = searchInput.value.trim().toLowerCase();
+
+  const articles = allArticles.filter((article) => {
+    const matchSource = activeSource === "all" || article.source.theme === activeSource;
+    if (!matchSource) {
+      return false;
+    }
+    if (!query) {
+      return true;
+    }
+    const haystack = `${article.title || ""} ${article.description || ""} ${article.source.title || ""}`.toLowerCase();
+    return haystack.includes(query);
+  });
+
+  result.replaceChildren();
+
+  for (const error of errors) {
+    const message = document.createElement("p");
+    message.className = "feed-error";
+    message.textContent = error.message;
+    result.append(message);
+  }
+
+  articles.forEach((article, index) => {
+    result.append(buildCard(article, index));
+  });
+
+  emptyEl.hidden = articles.length > 0 || errors.length > 0;
 }
 
-function renderFeed(feed) {
-  const section = document.createElement("section");
-  section.className = `feed-section feed-theme-${feed.theme || "default"}`;
+function buildCard(article, index) {
+  const card = document.createElement("article");
+  card.className = `card feed-theme-${article.source.theme || "default"}`;
+  card.style.animationDelay = `${Math.min(index, 12) * 40}ms`;
 
-  const header = document.createElement("div");
-  header.className = "feed-header";
+  const link = document.createElement("a");
+  link.className = "card-link";
+  link.href = article.link || "#";
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.setAttribute("aria-label", article.title || "Article sans titre");
 
-  const titleRow = document.createElement("div");
-  titleRow.className = "feed-title-row";
+  link.append(buildMedia(article), buildBody(article));
+  card.append(link);
+  return card;
+}
 
-  if (feed.image) {
+function buildMedia(article) {
+  const media = document.createElement("div");
+  media.className = "card-media";
+
+  if (article.image) {
+    const img = document.createElement("img");
+    img.src = article.image;
+    img.alt = "";
+    img.loading = "lazy";
+    img.addEventListener("error", () => {
+      media.replaceChildren();
+      fillEmptyMedia(media, article);
+    });
+    media.append(img);
+  } else {
+    fillEmptyMedia(media, article);
+  }
+
+  return media;
+}
+
+function fillEmptyMedia(media, article) {
+  media.classList.add("is-empty");
+  if (article.source.image) {
+    const glyph = document.createElement("div");
+    glyph.className = "media-glyph";
     const logo = document.createElement("img");
-    logo.className = "feed-logo";
-    logo.src = feed.image;
+    logo.src = article.source.image;
     logo.alt = "";
     logo.loading = "lazy";
-    titleRow.append(logo);
+    glyph.append(logo);
+    media.append(glyph);
+  }
+}
+
+function buildBody(article) {
+  const body = document.createElement("div");
+  body.className = "card-body";
+
+  const top = document.createElement("div");
+  top.className = "card-top";
+
+  const source = document.createElement("span");
+  source.className = "source";
+  if (article.source.image) {
+    const logo = document.createElement("img");
+    logo.src = article.source.image;
+    logo.alt = "";
+    logo.loading = "lazy";
+    source.append(logo);
+  }
+  const sourceName = document.createElement("span");
+  sourceName.textContent = article.source.title || "Flux RSS";
+  source.append(sourceName);
+  top.append(source);
+
+  if (article.pubDate) {
+    const date = document.createElement("span");
+    date.className = "date";
+    date.innerHTML = CALENDAR_ICON;
+    const text = document.createElement("span");
+    text.textContent = formatArticleDate(article.pubDate);
+    date.append(text);
+    top.append(date);
   }
 
-  const title = document.createElement("h2");
-  title.className = "feed-title";
-  title.textContent = feed.title || "Flux RSS";
+  const title = document.createElement("h3");
+  title.className = "card-title";
+  title.textContent = article.title || "Article sans titre";
 
-  titleRow.append(title);
+  body.append(top, title);
+
+  if (article.description) {
+    const desc = document.createElement("p");
+    desc.className = "card-desc";
+    desc.textContent = article.description;
+    body.append(desc);
+  }
+
+  const foot = document.createElement("div");
+  foot.className = "card-foot";
+  const footText = document.createElement("span");
+  footText.textContent = "Lire l'article";
+  foot.append(footText);
+  foot.insertAdjacentHTML("beforeend", ARROW_ICON);
+  body.append(foot);
+
+  return body;
+}
+
+function renderFilters() {
+  filtersEl.replaceChildren();
+
+  const sources = FEEDS.map((feed) => ({
+    theme: feed.theme,
+    title: feed.title,
+    image: feed.image,
+    count: allArticles.filter((article) => article.source.theme === feed.theme).length
+  })).filter((source) => source.count > 0);
+
+  filtersEl.append(buildChip({ theme: "all", title: "Tous", count: allArticles.length }));
+  sources.forEach((source) => filtersEl.append(buildChip(source)));
+}
+
+function buildChip(source) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = `chip${source.theme === activeSource ? " is-active" : ""} feed-theme-${source.theme || "default"}`;
+
+  if (source.image) {
+    const logo = document.createElement("img");
+    logo.src = source.image;
+    logo.alt = "";
+    chip.append(logo);
+  } else {
+    const dot = document.createElement("span");
+    dot.className = "chip-dot";
+    chip.append(dot);
+  }
+
+  const label = document.createElement("span");
+  label.textContent = source.title;
+  chip.append(label);
 
   const count = document.createElement("span");
-  count.className = "feed-count";
-  count.textContent = `${feed.items.length} article(s)`;
-  titleRow.append(count);
+  count.className = "chip-count";
+  count.textContent = source.count;
+  chip.append(count);
 
-  header.append(titleRow);
-  section.append(header);
+  chip.addEventListener("click", () => {
+    activeSource = source.theme;
+    filtersEl.querySelectorAll(".chip").forEach((node) => node.classList.remove("is-active"));
+    chip.classList.add("is-active");
+    render();
+  });
 
-  const divider = document.createElement("div");
-  divider.className = "feed-divider";
-  divider.setAttribute("aria-hidden", "true");
-  section.append(divider);
+  return chip;
+}
 
-  const carousel = document.createElement("div");
-  carousel.className = "article-carousel";
+function renderStats() {
+  const sourceCount = new Set(allArticles.map((article) => article.source.theme)).size;
+  statsEl.replaceChildren();
+  statsEl.append(buildStat("Articles", allArticles.length));
+  statsEl.append(buildStat("Sources", sourceCount));
+}
 
-  const list = document.createElement("ul");
-  list.className = "article-list";
-  enableDragScroll(list);
+function buildStat(label, value) {
+  const group = document.createElement("div");
+  const dd = document.createElement("dd");
+  dd.textContent = value;
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  group.append(dd, dt);
+  return group;
+}
 
-  for (const item of feed.items) {
-    const listItem = document.createElement("li");
-    listItem.className = "article-item";
+function renderSkeletons() {
+  result.replaceChildren();
+  emptyEl.hidden = true;
 
-    const cardLink = document.createElement("a");
-    cardLink.className = "article-card";
-    cardLink.href = item.link || "#";
-    cardLink.target = "_blank";
-    cardLink.rel = "noreferrer";
-    cardLink.draggable = false;
-    cardLink.setAttribute("aria-label", item.title || "Article sans titre");
+  for (let i = 0; i < 8; i += 1) {
+    const card = document.createElement("article");
+    card.className = "card skeleton";
 
-    if (item.image) {
-      const image = document.createElement("img");
-      image.className = "article-image";
-      image.src = item.image;
-      image.alt = "";
-      image.loading = "lazy";
-      image.draggable = false;
-      image.addEventListener("error", () => {
-        image.remove();
-      });
-      cardLink.append(image);
-    }
+    const media = document.createElement("div");
+    media.className = "card-media";
 
-    const meta = document.createElement("div");
-    meta.className = "article-meta";
+    const body = document.createElement("div");
+    body.className = "card-body";
+    body.append(
+      makeSkLine("short"),
+      makeSkLine("title"),
+      makeSkLine(),
+      makeSkLine("short")
+    );
 
-    const source = document.createElement("span");
-    source.className = "article-source";
-
-    if (feed.image) {
-      const sourceLogo = document.createElement("img");
-      sourceLogo.className = "article-source-logo";
-      sourceLogo.src = feed.image;
-      sourceLogo.alt = "";
-      sourceLogo.loading = "lazy";
-      source.append(sourceLogo);
-    }
-
-    const sourceName = document.createElement("span");
-    sourceName.textContent = feed.title || "Flux RSS";
-    source.append(sourceName);
-
-    meta.append(source);
-
-    if (item.pubDate) {
-      const date = document.createElement("small");
-      date.className = "article-date";
-
-      const dateIcon = document.createElement("span");
-      dateIcon.className = "article-date-icon";
-      dateIcon.setAttribute("aria-hidden", "true");
-      dateIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" focusable="false"><path d="M224.62-120q-27.62 0-46.12-18.5Q160-157 160-184.62v-510.76q0-27.62 18.5-46.12Q197-760 224.62-760h70.76v-89.23h43.08V-760h286.16v-89.23h40V-760h70.76q27.62 0 46.12 18.5Q800-723 800-695.38v510.76q0 27.62-18.5 46.12Q763-120 735.38-120H224.62Zm0-40h510.76q9.24 0 16.93-7.69 7.69-7.69 7.69-16.93v-350.76H200v350.76q0 9.24 7.69 16.93 7.69 7.69 16.93 7.69ZM200-575.39h560v-119.99q0-9.24-7.69-16.93-7.69-7.69-16.93-7.69H224.62q-9.24 0-16.93 7.69-7.69 7.69-7.69 16.93v119.99Zm0 0V-720-575.39Z"/></svg>`;
-
-      const dateText = document.createElement("span");
-      dateText.textContent = formatArticleDate(item.pubDate);
-
-      date.append(dateIcon, dateText);
-      meta.append(date);
-    }
-
-    const title = document.createElement("span");
-    title.className = "article-title";
-    title.textContent = item.title || "Article sans titre";
-
-    const separator = document.createElement("span");
-    separator.className = "article-separator";
-    separator.setAttribute("aria-hidden", "true");
-
-    cardLink.append(meta, separator, title);
-
-    listItem.append(cardLink);
-    list.append(listItem);
+    card.append(media, body);
+    result.append(card);
   }
+}
 
-  carousel.append(list);
-  section.append(carousel);
-  result.append(section);
+function makeSkLine(modifier) {
+  const line = document.createElement("div");
+  line.className = `sk-line${modifier ? " " + modifier : ""}`;
+  return line;
 }
 
 function setStatus(message) {
   statusText.textContent = message;
 }
 
-function enableDragScroll(list) {
-  let isDragging = false;
-  let didDrag = false;
-  let startX = 0;
-  let startScrollLeft = 0;
-  let capturedPointerId = null;
-  const dragThreshold = 10;
-
-  list.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) {
-      return;
-    }
-
-    isDragging = true;
-    didDrag = false;
-    startX = event.clientX;
-    startScrollLeft = list.scrollLeft;
-  });
-
-  list.addEventListener("pointermove", (event) => {
-    if (!isDragging) {
-      return;
-    }
-
-    const distance = event.clientX - startX;
-    if (!didDrag && Math.abs(distance) > dragThreshold) {
-      didDrag = true;
-      list.classList.add("is-dragging");
-
-      try {
-        list.setPointerCapture(event.pointerId);
-        capturedPointerId = event.pointerId;
-      } catch {
-        // Some browsers can reject capture if the pointer is already released.
-      }
-    }
-
-    if (didDrag) {
-      event.preventDefault();
-      list.scrollLeft = startScrollLeft - distance;
-    }
-  });
-
-  list.addEventListener("pointerup", (event) => {
-    isDragging = false;
-    list.classList.remove("is-dragging");
-
-    if (capturedPointerId !== null) {
-      try {
-        list.releasePointerCapture(capturedPointerId);
-      } catch {
-        // Pointer capture may already be released by the browser.
-      }
-
-      capturedPointerId = null;
-    }
-  });
-
-  list.addEventListener("click", (event) => {
-    if (didDrag) {
-      event.preventDefault();
-      event.stopPropagation();
-      didDrag = false;
-    }
-  }, true);
-
-  list.addEventListener("dragstart", (event) => {
-    event.preventDefault();
-  });
-
-  list.addEventListener("pointercancel", () => {
-    isDragging = false;
-    capturedPointerId = null;
-    list.classList.remove("is-dragging");
-  });
+function dateValue(value) {
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function formatArticleDate(value) {
@@ -282,7 +332,7 @@ function formatArticleDate(value) {
 
   return date.toLocaleDateString("fr-FR", {
     day: "2-digit",
-    month: "2-digit",
+    month: "short",
     year: "numeric"
   });
 }
