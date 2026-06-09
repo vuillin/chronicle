@@ -1,37 +1,37 @@
 # rss-monitor
 
-Petit dashboard pour recuperer et afficher des articles depuis des flux RSS.
+A small dashboard that fetches and displays articles from RSS feeds.
 
 ## Structure
 
-```txt
+```
 rss-monitor/
-├─ public/              # Fichiers envoyes au navigateur
-│  ├─ assets/           # Logos et images statiques
-│  ├─ feeds.js          # Liste des sources RSS affichees
-│  ├─ app.js            # Rendu de l'interface
+├─ public/
+│  ├─ assets/
+│  ├─ feeds.js
+│  ├─ app.js
 │  ├─ index.html
 │  └─ styles.css
-├─ samples/             # Extraits RSS pour debug/tests manuels
-├─ src/server/          # Serveur HTTP, fichiers statiques, parser RSS
-├─ server.js            # Point d'entree Node
-└─ server.ps1           # Lancement avec le Node portable
+├─ samples/
+├─ src/server/
+├─ server.js
+└─ server.ps1
 ```
 
-## Lancer le projet
-
-node portable dans `C:\Users\STAGE 2025\tools\node` :
+## Run
 
 ```powershell
 .\server.ps1
 ```
 
-Puis ouvrir :
+Then open `http://localhost:3000`.
 
-```txt
-http://localhost:3000
-```
+## Feeds
 
-## Ajouter un flux
-
-Modifier `public/feeds.js`, puis ajouter le logo dans `public/assets/` si besoin.
+| Source | URL |
+|---|---|
+| Ars Technica | https://feeds.arstechnica.com/arstechnica/index |
+| Hacker News | https://news.ycombinator.com/rss |
+| Korben | https://korben.info/feed |
+| GitHub Blog | https://github.blog/feed/ |
+| InfoQ | https://feed.infoq.com/ |
