@@ -6,7 +6,7 @@ const server = createServer();
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`RSS Monitor: http://localhost:${PORT}`);
+    console.log(`Chronicle: http://localhost:${PORT}`);
   });
 }
 

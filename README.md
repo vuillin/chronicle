@@ -1,11 +1,11 @@
-# rss-monitor
+# Chronicle
 
 A small dashboard that fetches and displays articles from RSS feeds.
 
 ## Structure
 
 ```
-rss-monitor/
+chronicle/
 ├─ public/
 │  ├─ assets/
 │  ├─ feeds.js

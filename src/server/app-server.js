@@ -52,7 +52,7 @@ async function handleFeedRequest(requestUrl, response) {
     feedResponse = await fetch(parsedUrl, {
       headers: {
         "accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; rss-monitor/0.1; +https://localhost)"
+        "user-agent": "Mozilla/5.0 (compatible; chronicle/0.1; +https://localhost)"
       }
     });
   } catch (error) {
